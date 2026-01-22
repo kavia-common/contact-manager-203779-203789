@@ -88,6 +88,8 @@ const router = express.Router();
  *                   example: development
  */
 router.get('/', healthController.check.bind(healthController));
+// Readiness/liveness endpoint used by PreviewManager (see HEALTHCHECK_PATH in .project_manifest.yaml)
+router.get('/healthz', healthController.check.bind(healthController));
 
 /**
  * @swagger
