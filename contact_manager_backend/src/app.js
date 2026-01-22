@@ -9,23 +9,44 @@ const { notFoundHandler, errorHandler } = require('./middleware/errors');
 // Initialize express app
 const app = express();
 
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+/**
+ * CORS:
+ * - In hosted preview, set CONTACT_MANAGER_FRONTEND_ORIGIN to the frontend URL (e.g. https://...:3000).
+ * - In local/dev, we allow all origins by default for convenience.
+ */
+const allowedOrigins = (process.env.CONTACT_MANAGER_FRONTEND_ORIGIN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Non-browser clients (curl/postman) may not send Origin
+      if (!origin) return cb(null, true);
+
+      // If not configured, keep permissive dev behavior.
+      if (allowedOrigins.length === 0) return cb(null, true);
+
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 app.set('trust proxy', true);
 app.use('/docs', swaggerUi.serve, (req, res, next) => {
-  const host = req.get('host');           // may or may not include port
-  let protocol = req.protocol;          // http or https
+  const host = req.get('host'); // may or may not include port
+  let protocol = req.protocol; // http or https
 
   const actualPort = req.socket.localPort;
   const hasPort = host.includes(':');
-  
+
   const needsPort =
     !hasPort &&
     ((protocol === 'http' && actualPort !== 80) ||
-     (protocol === 'https' && actualPort !== 443));
+      (protocol === 'https' && actualPort !== 443));
   const fullHost = needsPort ? `${host}:${actualPort}` : host;
   protocol = req.secure ? 'https' : protocol;
 
@@ -38,6 +59,32 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
     ],
   };
   swaggerUi.setup(dynamicSpec)(req, res, next);
+});
+
+// Provide a stable OpenAPI JSON endpoint that matches the spec shown in /docs.
+app.get('/openapi.json', (req, res) => {
+  const host = req.get('host');
+  let protocol = req.protocol;
+
+  const actualPort = req.socket.localPort;
+  const hasPort = host.includes(':');
+  const needsPort =
+    !hasPort &&
+    ((protocol === 'http' && actualPort !== 80) ||
+      (protocol === 'https' && actualPort !== 443));
+  const fullHost = needsPort ? `${host}:${actualPort}` : host;
+  protocol = req.secure ? 'https' : protocol;
+
+  const dynamicSpec = {
+    ...swaggerSpec,
+    servers: [
+      {
+        url: `${protocol}://${fullHost}`,
+      },
+    ],
+  };
+
+  res.json(dynamicSpec);
 });
 
 // Parse JSON request body
