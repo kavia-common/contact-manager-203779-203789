@@ -1,0 +1,4 @@
+{
+    "command": "npm run test",
+    "working_directory": "/home/kavia/workspace/code-generation/contact-manager-203779-203789/contact_manager_backend"
+}
