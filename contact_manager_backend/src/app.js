@@ -3,6 +3,8 @@ const express = require('express');
 const routes = require('./routes');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('../swagger');
+const { getDb } = require('./db/sqlite');
+const { notFoundHandler, errorHandler } = require('./middleware/errors');
 
 // Initialize express app
 const app = express();
@@ -41,16 +43,20 @@ app.use('/docs', swaggerUi.serve, (req, res, next) => {
 // Parse JSON request body
 app.use(express.json());
 
+// Initialize SQLite and run migrations on startup.
+// If the DB cannot be initialized, fail fast (better than serving a broken API).
+getDb().catch((err) => {
+  console.error('Failed to initialize SQLite database:', err);
+  process.exit(1);
+});
+
 // Mount routes
 app.use('/', routes);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    status: 'error',
-    message: 'Internal Server Error',
-  });
-});
+// 404 handler for unknown routes (consistent JSON error)
+app.use(notFoundHandler);
+
+// Error handling middleware (consistent JSON errors)
+app.use(errorHandler);
 
 module.exports = app;
